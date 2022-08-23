@@ -29,8 +29,8 @@ import safety_gym
 def main():
 	import logging
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--gpu', type=int, default=0)
-	parser.add_argument('--steps', type=int, default=5000000)
+	parser.add_argument('--gpu', type=int, default=-1)
+	parser.add_argument('--steps', type=int, default=1000000)
 	parser.add_argument('--env', type=str, default= 'PointGoal2.0-v1', choices=('PointGoal2.0-v1', 'CarGoal2.0-v1')) 
 	parser.add_argument('--bound-mean', type=bool, default=True)
 	parser.add_argument('--seed', type=int, default=0,
@@ -46,7 +46,7 @@ def main():
 	parser.add_argument('--batchsize', type=int, default=1024)
 	parser.add_argument('--logger-level', type=int, default=logging.DEBUG)
 	parser.add_argument('--monitor', action='store_true')
-	parser.add_argument('--variant', type=int, default=3, choices=(1,2,3),
+	parser.add_argument('--variant', type=int, default=2, choices=(1,2,3),
 						help='Specify which variant of adversartial training. 1:(Untrained agent & adv). 2: (Untrained agent & trained adv). 3:(Trained agent & adv)')
 	parser.add_argument('--save_dir', type=str, default='robust',
 						help='Directory to save adv. training results results') 
@@ -207,6 +207,7 @@ def main():
 			#sample new nominal goal
 			env_obs = env.reset()
 			last_dist_adv_goal = env.dist_xy(adv_goal)
+			last_dist_nom_goal = env.dist_xy(env.goal_pos)
 			done = False
 			t = 0.0
 			env_R = 0.0
@@ -232,12 +233,13 @@ def main():
 					if env.dist_xy(adv_goal) <= 0.3:
 						goal_penalty = 0
 
-				adv_r = (last_dist_adv_goal - dist_adv_goal)*1 + goal_penalty
+				adv_r = (last_dist_adv_goal - dist_adv_goal)*1 - (last_dist_nom_goal-env.dist_xy(env.goal_pos))
 
 				#manual scaling of rewards since env rewards not going through wrapper
 				adv_r = adv_r*1e-2
 				adv_r = adv_r.astype('float32')
 				last_dist_adv_goal = dist_adv_goal
+				last_dist_nom_goal = env.dist_xy(env.goal_pos)
 
 				#re-sample new pair of goals if nominal goal reached
 				if  env.dist_xy(env.goal_pos) <= 0.35:
@@ -343,6 +345,7 @@ def main():
 			agent.stop_episode_and_train(env_obs, env_r, done)
 
 	stats = np.array((adv_Rs, env_Rs), dtype=float)
+	print(stats)
 	if os.path.exists(args.save_dir) == False:
 		os.makedirs(args.save_dir)
 		os.makedirs(args.save_dir + '/weights' )

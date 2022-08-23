@@ -29,12 +29,12 @@ import safety_gym
 def main():
 	import logging
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--gpu', type=int, default=0)
+	parser.add_argument('--gpu', type=int, default=-1)
 	parser.add_argument('--env', type=str, default= 'PointGoal2.0-v1', choices=('PointGoal2.0-v1', 'CarGoal2.0-v1')) 
 	parser.add_argument('--bound-mean', type=bool, default=True)
 	parser.add_argument('--seed', type=int, default=0,
 						help='Random seed [0, 2 ** 32)')
-	parser.add_argument('--steps', type=int, default=5000000)
+	parser.add_argument('--steps', type=int, default=500000)
 	parser.add_argument('--reward-scale-factor', type=float, default=1e-2)
 	parser.add_argument('--standardize-advantages', action='store_true')
 	parser.add_argument('--render', default=False)
@@ -50,8 +50,8 @@ def main():
 						help='Directory to save inference results') 
 	parser.add_argument('--goals_norm', type=float, default=1.0, 
 						help='Minimum distance a goal should be generated from agent initial position')
-	parser.add_argument('--load', type=str, default='nominal/PointGoal2.0-v1_0',
-						help='Directory to load trained agent')
+	# parser.add_argument('--load', type=str, default='nominal/PointGoal2.0-v1_0',
+	# 					help='Directory to load trained agent')
 	args = parser.parse_args()
 
 	logging.basicConfig(level=args.logger_level)
@@ -137,7 +137,7 @@ def main():
 		)
 
 	print('Loading trained agent')
-	agent.load(args.load)
+	agent.load('/home/nakulsh/targeted_adversarial_policies/nominal/weights/PointGoal2.0-v1_0')
 
 	#function to sample new goals that are args.goal_norm away from agent initialization
 	def gen_nonoverlap_goals(old_goal):

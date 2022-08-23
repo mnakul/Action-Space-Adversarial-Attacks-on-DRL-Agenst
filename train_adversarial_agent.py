@@ -26,9 +26,10 @@ from chainerrl.initializers import LeCunNormal
 from chainerrl.policy import Policy
 
 def main():
+	print("Hello")
 	import logging
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--gpu', type=int, default=0)
+	parser.add_argument('--gpu', type=int, default=-1)
 	parser.add_argument('--env', type=str, default= 'PointGoal2.0-v1') 
 	parser.add_argument('--bound-mean', type=bool, default=True)
 	parser.add_argument('--seed', type=int, default=0,
@@ -47,11 +48,13 @@ def main():
 	parser.add_argument('--entropy-coef', type=float, default=0.0)
 	parser.add_argument('--variant', type=str, default='A', choices=('A','SA'),
 						help='Specify what the adversary observes. A: (Action). SA: (State, Action)')
-	parser.add_argument('--load', type=str, required=True, default='nominal/PointGoal2.0-v1_0', 
-						help='Directory to load trained nominal agent') 
+	parser.add_argument('--load', type=str, required=True, default='/home/nakulsh/targeted_adversarial_policies/nominal/weights/PointGoal2.0-v1_0', 
+							help='Directory to load trained nominal agent') 
 	parser.add_argument('--save_dir', type=str, default='adversary/',
-						help='Directory to save adversarial agent') 
+						help='Directory to save adversarial agent')
+	print("A") 
 	args = parser.parse_args()
+	print("B")
 
 	logging.basicConfig(level=args.logger_level)
 	misc.set_random_seed(args.seed, gpus=(args.gpu,))
@@ -205,6 +208,7 @@ def main():
 			#reset env to generate new nominal goal
 			env_obs = env.reset()
 			last_dist_adv_goal = env.dist_xy(adv_goal)
+			last_dist_nom_goal = env.dist_xy(env.goal_pos)
 			done = False
 			t = 0.0
 			env_R = 0.0
@@ -231,11 +235,12 @@ def main():
 						goal_penalty = 0
 
 				#adversary reward function
-				adv_r = (last_dist_adv_goal - dist_adv_goal)*1 + goal_penalty
+				adv_r = (last_dist_adv_goal - dist_adv_goal)*1 - (last_dist_nom_goal-env.dist_xy(env.goal_pos))
 				#manually scale rewards since env rewards not going through wrapper
 				adv_r = adv_r*1e-2
 				adv_r = adv_r.astype('float32')
 				last_dist_adv_goal = dist_adv_goal
+				last_dist_nom_goal = env.dist_xy(env.goal_pos)
 
 				#re-sample new pair of goals if adversarial goal reached
 				if  env.dist_xy(adv_goal) <= 0.3:
@@ -250,81 +255,19 @@ def main():
 				t += 1
 				i += 1
 		 
-		adv_Rs.append(adv_R)
-		env_Rs.append(env_R)
+			adv_Rs.append(adv_R)
+			env_Rs.append(env_R)
 
-		if i % 1000 == 0:
-			print('Step:', i, 'R:', env_R, 'adv_R:', adv_R)
-			print('')
-			print('statistics:',adversary.get_statistics())
-		adversary.stop_episode_and_train(concat_obs, adv_r, done)
+			if i % 1000 == 0:
+				print('Step:', i, 'R:', env_R, 'adv_R:', adv_R)
+				print('')
+				print('statistics:',adversary.get_statistics())
+			adversary.stop_episode_and_train(concat_obs, adv_r, done)
 
-	elif args.variant == 'SA':
-		print('Training adversarial policy on nominal agent actions and states')
-		while i < args.steps:
-			#reset to generate random adversarial goal
-			_ = env.reset()
-			#set adversarial goal as current initialized goal
-			adv_goal = env.goal_pos
-			#reset env to generate new nominal goal
-			env_obs = env.reset()
-			last_dist_adv_goal = env.dist_xy(adv_goal)
-			done = False
-			t = 0.0
-			env_R = 0.0
-			adv_R = 0.0
-			env_r = 0.0
-			adv_r = 0.0
-			while not done and t < 1000: 
-				action = agent.act(env_obs)
-				lidar_to_adv = env.obs_lidar([adv_goal],0)
-				#this is the only difference between variant (A) and (S,A)
-				concat_obs = np.hstack((action, env_obs, lidar_to_adv)).astype('float32')
-				delta = adversary.act_and_train(concat_obs, adv_r)
-				adv_action = action + delta
-				env_obs, env_r, done, _ = env.step(adv_action)
-
-				# env.render()
-				# env.render_area(adv_goal , 0.3, COLOR_BUTTON, 'adv_goal', alpha=0.5)
-
-				dist_adv_goal = env.dist_xy(adv_goal)
-				# penalty for adversarial policy going to nominal goal
-				goal_penalty = 0
-				if env.dist_xy(env.goal_pos) <= 0.3:
-					goal_penalty = -1
-					if env.dist_xy(adv_goal) <= 0.3:
-						goal_penalty = 0
-
-				#adversary reward function
-				adv_r = (last_dist_adv_goal - dist_adv_goal)*1 + goal_penalty
-				#manually scale rewards since env rewards not going through wrapper
-				adv_r = adv_r*1e-2
-				adv_r = adv_r.astype('float32')
-				last_dist_adv_goal = dist_adv_goal
-
-				#re-sample new pair of goals if adversarial goal reached
-				if  env.dist_xy(adv_goal) <= 0.3:
-					adv_r += (1*1e-2)
-					_ = env.reset()
-					adv_goal = env.goal_pos
-					env_obs = env.reset()
-					last_dist_adv_goal = env.dist_xy(adv_goal)
-
-				env_R += env_r
-				adv_R += adv_r
-				t += 1
-				i += 1
-		 
-		adv_Rs.append(adv_R)
-		env_Rs.append(env_R)
-
-		if i % 1000 == 0:
-			print('Step:', i, 'R:', env_R, 'adv_R:', adv_R)
-			print('')
-			print('statistics:',adversary.get_statistics())
-		adversary.stop_episode_and_train(concat_obs, adv_r, done)
+	
 
 	stats = np.array((adv_Rs, env_Rs), dtype=float)
+	print(stats)
 	if os.path.exists(args.save_dir) == False:
 		os.makedirs(args.save_dir)
 		os.makedirs(args.save_dir + '/weights' )

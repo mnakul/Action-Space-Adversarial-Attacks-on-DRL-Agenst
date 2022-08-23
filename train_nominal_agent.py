@@ -30,7 +30,7 @@ def main():
 	import logging
 
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--gpu', type=int, default=0)
+	parser.add_argument('--gpu', type=int, default=-1)
 	parser.add_argument('--env', type=str, default= 'PointGoal2.0-v1', choices=('PointGoal2.0-v1', 'CarGoal2.0-v1')) 
 	parser.add_argument('--bound-mean', type=bool, default=True)
 	parser.add_argument('--seed', type=int, default=0,
@@ -156,6 +156,7 @@ def main():
 		agent.stop_episode_and_train(env_obs, env_r, done)
 
 	stats = np.array(env_Rs, dtype=float)
+	print(stats)
 	if os.path.exists(args.save_dir) == False:
 		os.makedirs(args.save_dir)
 		os.makedirs(args.save_dir + '/weights' )
